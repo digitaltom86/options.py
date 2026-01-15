@@ -1,77 +1,51 @@
 """
-🎓 AKADEMIA OPCJI - Kompletna Platforma Edukacyjna
-Zoptymalizowany kod do nauki wszystkich strategii opcyjnych
+🎓 AKADEMIA OPCJI v2.0 - KOMPLETNA PLATFORMA EDUKACYJNA
+Wszystkie strategie opcyjne z pełnym kontekstem "kiedy używać"
 """
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from scipy.stats import norm
 from dataclasses import dataclass
-from typing import Callable
 
 # ══════════════════════════════════════════════════════════════════════════════
-# KONFIGURACJA I STAŁE
+# KONFIGURACJA
 # ══════════════════════════════════════════════════════════════════════════════
-st.set_page_config(
-    page_title="🎓 Akademia Opcji", 
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Stałe finansowe
+st.set_page_config(page_title="🎓 Akademia Opcji v2.0", page_icon="📈", layout="wide")
 R = 0.045  # Stopa wolna od ryzyka
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MODEL BLACKA-SCHOLESA - Serce wyceny opcji
+# MODEL BLACKA-SCHOLESA
 # ══════════════════════════════════════════════════════════════════════════════
-def bs(S: float, K: float, T: float, r: float, σ: float, typ: str = "call") -> dict:
-    """
-    Model Blacka-Scholesa - wycena opcji i współczynniki greckie.
-    
-    Parametry:
-        S: Cena spot aktywa bazowego
-        K: Strike (cena wykonania)
-        T: Czas do wygaśnięcia (w latach)
-        r: Stopa wolna od ryzyka
-        σ: Zmienność implikowana (sigma)
-        typ: "call" lub "put"
-    
-    Zwraca słownik z: cena, delta, gamma, theta, vega
-    """
-    T = max(T, 1e-6)  # Zabezpieczenie przed dzieleniem przez zero
+def bs(S, K, T, r, σ, typ="call"):
+    """Model Blacka-Scholesa - wycena i Greeks"""
+    T = max(T, 1e-6)
     sqrt_T = np.sqrt(T)
-    
     d1 = (np.log(S / K) + (r + 0.5 * σ**2) * T) / (σ * sqrt_T)
     d2 = d1 - σ * sqrt_T
-    
-    # Wartości pomocnicze
-    Nd1, Nd2 = norm.cdf(d1), norm.cdf(d2)
-    nd1 = norm.pdf(d1)
+    Nd1, Nd2, nd1 = norm.cdf(d1), norm.cdf(d2), norm.pdf(d1)
     exp_rT = np.exp(-r * T)
     
     if typ == "call":
         cena = S * Nd1 - K * exp_rT * Nd2
         delta = Nd1
-        theta_dir = norm.cdf(d2)
+        theta_cdf = Nd2
     else:
         cena = K * exp_rT * (1 - Nd2) - S * (1 - Nd1)
         delta = Nd1 - 1
-        theta_dir = norm.cdf(-d2)
+        theta_cdf = norm.cdf(-d2)
     
-    # Współczynniki greckie (wspólne dla call i put)
     gamma = nd1 / (S * σ * sqrt_T)
-    vega = S * nd1 * sqrt_T / 100  # Na 1% zmianę IV
-    theta = (-(S * nd1 * σ) / (2 * sqrt_T) - r * K * exp_rT * theta_dir) / 365
+    vega = S * nd1 * sqrt_T / 100
+    theta = (-(S * nd1 * σ) / (2 * sqrt_T) - r * K * exp_rT * theta_cdf) / 365
     
     return {"cena": cena, "delta": delta, "gamma": gamma, "theta": theta, "vega": vega}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DEFINICJE STRATEGII - Biblioteka wiedzy
+# DEFINICJE WSZYSTKICH STRATEGII
 # ══════════════════════════════════════════════════════════════════════════════
 @dataclass
 class Strategia:
-    """Struktura danych opisująca strategię opcyjną"""
     nazwa: str
     kategoria: str
     opis: str
@@ -81,459 +55,1005 @@ class Strategia:
     max_strata: str
     breakeven: str
     greeks: str
-    poziom: str  # "🟢 Podstawowy", "🟡 Średni", "🔴 Zaawansowany"
-    
+    poziom: str
+    uwagi: str = ""
+
 STRATEGIE = {
     # ═══════════════════════════════════════════════════════════════════════════
-    # STRATEGIE PODSTAWOWE
+    # 📗 STRATEGIE PODSTAWOWE - SINGLE LEG
     # ═══════════════════════════════════════════════════════════════════════════
     "Long Call": Strategia(
         nazwa="Long Call",
-        kategoria="📗 Podstawowa",
-        opis="Najprostsza strategia byka - kupno opcji call z oczekiwaniem wzrostu ceny.",
-        kiedy="✅ Oczekujesz SILNEGO wzrostu ceny\n✅ Chcesz ograniczyć ryzyko do premii\n✅ Masz określony horyzont czasowy\n❌ NIE używaj przy wysokiej IV (drogo!)",
-        konstrukcja="Kupno 1 opcji CALL",
+        kategoria="📗 Podstawowe",
+        opis="Kupno opcji call - najprostsza gra na wzrost ceny.",
+        kiedy="""✅ Oczekujesz SILNEGO wzrostu ceny
+✅ Chcesz ograniczyć ryzyko do premii
+✅ Przed pozytywnymi wydarzeniami (wyniki, FDA)
+✅ Przy NISKIEJ IV (tanie opcje!)
+❌ NIE używaj przy wysokiej IV - przepłacasz
+❌ NIE przy oczekiwaniu małego ruchu""",
+        konstrukcja="Kupno 1 CALL",
         max_zysk="♾️ Nieograniczony",
-        max_strata="Ograniczona do zapłaconej premii",
+        max_strata="Zapłacona premia",
         breakeven="Strike + Premia",
-        greeks="Delta ⬆️ | Gamma ⬆️ | Theta ⬇️ | Vega ⬆️",
-        poziom="🟢 Podstawowy"
+        greeks="Delta ⬆️ dodatnia | Theta ⬇️ ujemna | Vega ⬆️ dodatnia",
+        poziom="🟢",
+        uwagi="Najprostsza strategia byka. Czas pracuje przeciwko Tobie!"
     ),
+    
     "Long Put": Strategia(
         nazwa="Long Put",
-        kategoria="📗 Podstawowa",
-        opis="Najprostsza strategia niedźwiedzia - kupno opcji put z oczekiwaniem spadku.",
-        kiedy="✅ Oczekujesz SILNEGO spadku ceny\n✅ Chcesz zabezpieczyć długą pozycję\n✅ Przed negatywnymi wydarzeniami\n❌ NIE używaj przy wysokiej IV",
-        konstrukcja="Kupno 1 opcji PUT",
-        max_zysk="Ograniczony (cena może spaść do 0)",
-        max_strata="Ograniczona do zapłaconej premii",
+        kategoria="📗 Podstawowe",
+        opis="Kupno opcji put - najprostsza gra na spadek ceny.",
+        kiedy="""✅ Oczekujesz SILNEGO spadku ceny
+✅ Chcesz zabezpieczyć portfel akcji
+✅ Przed negatywnymi wydarzeniami
+✅ Przy NISKIEJ IV
+❌ NIE przy wysokiej IV
+❌ NIE jako długoterminowe zabezpieczenie (drogo!)""",
+        konstrukcja="Kupno 1 PUT",
+        max_zysk="Strike - Premia (cena może spaść do 0)",
+        max_strata="Zapłacona premia",
         breakeven="Strike - Premia",
-        greeks="Delta ⬇️ | Gamma ⬆️ | Theta ⬇️ | Vega ⬆️",
-        poziom="🟢 Podstawowy"
+        greeks="Delta ⬇️ ujemna | Theta ⬇️ ujemna | Vega ⬆️ dodatnia",
+        poziom="🟢",
+        uwagi="Ubezpieczenie portfela. Drożeje gdy rynek panikuje."
+    ),
+    
+    "Short Call (Naked)": Strategia(
+        nazwa="Short Call (Naked)",
+        kategoria="📗 Podstawowe",
+        opis="Sprzedaż opcji call bez posiadania akcji - bardzo ryzykowne!",
+        kiedy="""✅ Oczekujesz spadku lub stagnacji
+✅ Przy WYSOKIEJ IV (wysoka premia)
+✅ Masz duży kapitał na depozyt
+⚠️ TYLKO dla doświadczonych!
+❌ NIGDY przed ważnymi wydarzeniami
+❌ NIE bez zrozumienia ryzyka!""",
+        konstrukcja="Sprzedaż 1 CALL (bez akcji)",
+        max_zysk="Otrzymana premia",
+        max_strata="♾️ NIEOGRANICZONA! (cena może rosnąć w nieskończoność)",
+        breakeven="Strike + Premia",
+        greeks="Delta ⬇️ ujemna | Theta ⬆️ dodatnia | Vega ⬇️ ujemna",
+        poziom="🔴",
+        uwagi="⚠️ EKSTREMALNE RYZYKO! Możesz stracić więcej niż masz na koncie!"
+    ),
+    
+    "Short Put (Cash-Secured)": Strategia(
+        nazwa="Short Put (Cash-Secured)",
+        kategoria="📗 Podstawowe",
+        opis="Sprzedaż opcji put z gotówką na koncie - 'kupowanie akcji z rabatem'.",
+        kiedy="""✅ CHCESZ kupić akcje, ale taniej
+✅ Lubisz spółkę i chcesz ją posiadać
+✅ Przy WYSOKIEJ IV (wysoka premia)
+✅ Rynek boczny lub lekko wzrostowy
+✅ Masz gotówkę na kupno 100 akcji
+❌ NIE jeśli nie chcesz posiadać akcji!
+❌ NIE przed spadkowym rynkiem""",
+        konstrukcja="Sprzedaż 1 PUT + Gotówka = Strike × 100",
+        max_zysk="Otrzymana premia",
+        max_strata="Strike - Premia (jeśli akcja spadnie do 0)",
+        breakeven="Strike - Premia",
+        greeks="Delta ⬆️ dodatnia | Theta ⬆️ dodatnia | Vega ⬇️ ujemna",
+        poziom="🟢",
+        uwagi="""💡 STRATEGIA WARRENA BUFFETTA!
+Scenariusz 1: Cena > Strike → zatrzymujesz premię (dochód!)
+Scenariusz 2: Cena < Strike → kupujesz akcje po Strike-Premia (rabat!)
+WIN-WIN jeśli lubisz spółkę!"""
     ),
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # STRATEGIE DOCHODOWE
+    # 💰 STRATEGIE DOCHODOWE
     # ═══════════════════════════════════════════════════════════════════════════
     "Covered Call": Strategia(
         nazwa="Covered Call",
-        kategoria="💰 Dochodowa",
-        opis="Posiadanie akcji + sprzedaż call. Generujesz dochód w zamian za ograniczenie wzrostu.",
-        kiedy="✅ Posiadasz akcje długoterminowo\n✅ Oczekujesz ruchu bocznego/lekkiego wzrostu\n✅ Chcesz generować miesięczny dochód\n✅ Przy wysokiej IV (wyższe premie!)\n❌ NIE przy oczekiwaniu silnego wzrostu",
+        kategoria="💰 Dochodowe",
+        opis="Posiadasz akcje + sprzedajesz call. Generujesz dochód w zamian za limit wzrostu.",
+        kiedy="""✅ Posiadasz akcje długoterminowo
+✅ Oczekujesz ruchu bocznego/małego wzrostu
+✅ Chcesz generować miesięczny dochód
+✅ Przy WYSOKIEJ IV (wyższa premia!)
+✅ Na akcjach które nie chcesz sprzedać
+❌ NIE przy oczekiwaniu silnego wzrostu
+❌ NIE tuż przed dywidendą (ryzyko assignment)""",
         konstrukcja="100 akcji + Sprzedaż 1 CALL OTM",
         max_zysk="(Strike - Cena akcji) + Premia",
-        max_strata="Duża (cena może spaść do 0), zmniejszona o premię",
+        max_strata="Cena akcji - Premia (spadek do 0)",
         breakeven="Cena zakupu akcji - Premia",
-        greeks="Delta ⬆️ mała | Theta ⬆️ (korzystna!)",
-        poziom="🟢 Podstawowy"
+        greeks="Delta ⬆️ mała | Theta ⬆️ dodatnia | Vega ⬇️ ujemna",
+        poziom="🟢",
+        uwagi="Najpopularniejsza strategia dochodowa. 'Wynajem' akcji co miesiąc."
     ),
-    "Protective Put": Strategia(
-        nazwa="Protective Put",
-        kategoria="🛡️ Zabezpieczająca",
-        opis="Ubezpieczenie akcji - kupno put jako ochrona przed spadkiem.",
-        kiedy="✅ Posiadasz akcje i boisz się spadku\n✅ Przed ważnymi wydarzeniami (wyniki)\n✅ Chcesz zachować potencjał wzrostu\n❌ Kosztowne przy wysokiej IV",
-        konstrukcja="100 akcji + Kupno 1 PUT",
-        max_zysk="♾️ Nieograniczony (wzrost akcji)",
-        max_strata="(Cena akcji - Strike) + Premia",
-        breakeven="Cena zakupu + Premia",
-        greeks="Delta ⬆️ z ograniczeniem strat",
-        poziom="🟢 Podstawowy"
-    ),
-    "Collar": Strategia(
-        nazwa="Collar",
-        kategoria="🛡️ Zabezpieczająca",
-        opis="Ochrona za darmo - kupno put + sprzedaż call. Ograniczasz zysk i stratę.",
-        kiedy="✅ Chcesz zabezpieczyć zyski BEZ KOSZTU\n✅ Przed niepewnymi wydarzeniami\n✅ Gdy masz duży niezrealizowany zysk\n❌ Ogranicza dalszy wzrost",
-        konstrukcja="100 akcji + Kupno PUT OTM + Sprzedaż CALL OTM",
-        max_zysk="Strike call - Cena akcji ± Premia netto",
-        max_strata="Cena akcji - Strike put ± Premia netto",
-        breakeven="Zależy od premii (często zero-cost)",
-        greeks="Delta ⬆️ ograniczona | Theta/Vega minimalne",
-        poziom="🟡 Średni"
+    
+    "Covered Put": Strategia(
+        nazwa="Covered Put",
+        kategoria="💰 Dochodowe",
+        opis="Masz krótką pozycję w akcjach + sprzedajesz put. Dochód przy spadku.",
+        kiedy="""✅ Masz SHORT na akcjach
+✅ Oczekujesz spadku lub stagnacji
+✅ Przy WYSOKIEJ IV
+❌ NIE przy oczekiwaniu silnego spadku
+❌ Mniej popularna strategia""",
+        konstrukcja="Short 100 akcji + Sprzedaż 1 PUT OTM",
+        max_zysk="(Cena sprzedaży - Strike) + Premia",
+        max_strata="♾️ Nieograniczona (cena może rosnąć)",
+        breakeven="Cena sprzedaży akcji + Premia",
+        greeks="Delta ⬇️ ujemna | Theta ⬆️ dodatnia",
+        poziom="🟡",
+        uwagi="Lustrzane odbicie covered call. Dla shortujących."
     ),
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # SPREADY
+    # 🛡️ STRATEGIE ZABEZPIECZAJĄCE
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Protective Put": Strategia(
+        nazwa="Protective Put",
+        kategoria="🛡️ Zabezpieczające",
+        opis="Masz akcje + kupujesz put jako ubezpieczenie od spadku.",
+        kiedy="""✅ Masz zysk na akcjach i chcesz go chronić
+✅ Przed niepewnymi wydarzeniami (wybory, wyniki)
+✅ Chcesz zachować potencjał wzrostu
+✅ Przy NISKIEJ IV (tańsze ubezpieczenie)
+❌ Kosztowne przy wysokiej IV
+❌ Nie na długi termin (theta zjada)""",
+        konstrukcja="100 akcji + Kupno 1 PUT",
+        max_zysk="♾️ Nieograniczony",
+        max_strata="(Cena akcji - Strike) + Premia",
+        breakeven="Cena akcji + Premia",
+        greeks="Delta ⬆️ z limitem strat | Theta ⬇️",
+        poziom="🟢",
+        uwagi="Polisa ubezpieczeniowa na akcje. Spokojny sen."
+    ),
+    
+    "Protective Call": Strategia(
+        nazwa="Protective Call",
+        kategoria="🛡️ Zabezpieczające",
+        opis="Masz SHORT + kupujesz call jako ochrona przed wzrostem.",
+        kiedy="""✅ Masz krótką pozycję w akcjach
+✅ Chcesz ograniczyć ryzyko short squeeze
+✅ Przed wydarzeniami mogącymi wywołać wzrost
+❌ Kosztowne przy wysokiej IV""",
+        konstrukcja="Short 100 akcji + Kupno 1 CALL",
+        max_zysk="Cena sprzedaży - Premia (spadek do 0)",
+        max_strata="(Strike - Cena sprzedaży) + Premia",
+        breakeven="Cena sprzedaży - Premia",
+        greeks="Delta ⬇️ z limitem strat | Theta ⬇️",
+        poziom="🟡",
+        uwagi="Ubezpieczenie dla shortujących."
+    ),
+    
+    "Collar (Zero-Cost)": Strategia(
+        nazwa="Collar (Zero-Cost)",
+        kategoria="🛡️ Zabezpieczające",
+        opis="Akcje + kupno put + sprzedaż call. Ochrona za darmo, ale z limitem wzrostu.",
+        kiedy="""✅ Chcesz zabezpieczyć zyski BEZ KOSZTU
+✅ Masz duży niezrealizowany zysk na akcjach
+✅ Przed niepewnymi wydarzeniami
+✅ Akceptujesz ograniczenie dalszych zysków
+❌ NIE gdy oczekujesz silnego wzrostu""",
+        konstrukcja="100 akcji + Kupno PUT OTM + Sprzedaż CALL OTM",
+        max_zysk="Strike call - Cena akcji",
+        max_strata="Cena akcji - Strike put",
+        breakeven="Cena akcji (przy zero-cost)",
+        greeks="Delta ⬆️ ograniczona | Theta ≈ 0 | Vega ≈ 0",
+        poziom="🟡",
+        uwagi="Darmowe ubezpieczenie! Popularny przy dużych zyskach."
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 📊 SPREADY PIONOWE (VERTICAL SPREADS)
     # ═══════════════════════════════════════════════════════════════════════════
     "Bull Call Spread": Strategia(
         nazwa="Bull Call Spread",
-        kategoria="📊 Spread",
-        opis="Tańszy wzrost - kupno call + sprzedaż wyższego call. Ogranicza koszt i zysk.",
-        kiedy="✅ Oczekujesz UMIARKOWANEGO wzrostu\n✅ Chcesz tańszą alternatywę dla long call\n✅ Przy wysokiej IV (sprzedaż offset'uje koszt)\n❌ NIE przy oczekiwaniu silnego wzrostu",
-        konstrukcja="Kupno CALL niższy strike + Sprzedaż CALL wyższy strike",
-        max_zysk="Różnica strike'ów - Premia netto",
+        kategoria="📊 Spready",
+        opis="Kupno call + sprzedaż wyższego call. Tańszy zakład na wzrost.",
+        kiedy="""✅ Oczekujesz UMIARKOWANEGO wzrostu
+✅ Chcesz tańszą alternatywę dla long call
+✅ Znasz poziom docelowy (target)
+✅ Przy WYSOKIEJ IV (sprzedaż offset)
+❌ NIE przy oczekiwaniu silnego wzrostu""",
+        konstrukcja="Kupno CALL niższy K + Sprzedaż CALL wyższy K",
+        max_zysk="Różnica strike'ów - Koszt netto",
         max_strata="Zapłacona premia netto",
-        breakeven="Niższy strike + Premia",
-        greeks="Delta ⬆️ | Theta ≈ neutralna",
-        poziom="🟡 Średni"
+        breakeven="Niższy strike + Koszt",
+        greeks="Delta ⬆️ umiarkowana | Theta ≈ neutralna",
+        poziom="🟡",
+        uwagi="Spread debetowy. Płacisz z góry, ograniczony zysk."
     ),
+    
     "Bear Put Spread": Strategia(
         nazwa="Bear Put Spread",
-        kategoria="📊 Spread",
-        opis="Tańszy spadek - kupno put + sprzedaż niższego put. Ogranicza koszt i zysk.",
-        kiedy="✅ Oczekujesz UMIARKOWANEGO spadku\n✅ Chcesz tańszą alternatywę dla long put\n✅ Przy wysokiej IV\n❌ NIE przy oczekiwaniu silnego spadku",
-        konstrukcja="Kupno PUT wyższy strike + Sprzedaż PUT niższy strike",
-        max_zysk="Różnica strike'ów - Premia netto",
+        kategoria="📊 Spready",
+        opis="Kupno put + sprzedaż niższego put. Tańszy zakład na spadek.",
+        kiedy="""✅ Oczekujesz UMIARKOWANEGO spadku
+✅ Chcesz tańszą alternatywę dla long put
+✅ Znasz poziom docelowy
+✅ Przy WYSOKIEJ IV
+❌ NIE przy oczekiwaniu silnego spadku""",
+        konstrukcja="Kupno PUT wyższy K + Sprzedaż PUT niższy K",
+        max_zysk="Różnica strike'ów - Koszt netto",
         max_strata="Zapłacona premia netto",
-        breakeven="Wyższy strike - Premia",
-        greeks="Delta ⬇️ | Theta ≈ neutralna",
-        poziom="🟡 Średni"
+        breakeven="Wyższy strike - Koszt",
+        greeks="Delta ⬇️ umiarkowana | Theta ≈ neutralna",
+        poziom="🟡",
+        uwagi="Spread debetowy niedźwiedzi."
     ),
-    "Bull Put Spread": Strategia(
-        nazwa="Bull Put Spread",
-        kategoria="📊 Spread",
-        opis="Kredytowy byczy - sprzedaż put + kupno niższego put. Zarabiasz jeśli cena nie spada.",
-        kiedy="✅ Oczekujesz, że cena NIE SPADNIE\n✅ Chcesz natychmiastową premię\n✅ Przy wysokiej IV (wyższe premie)\n✅ Rynek boczny lub lekko wzrostowy",
-        konstrukcja="Sprzedaż PUT wyższy strike + Kupno PUT niższy strike",
+    
+    "Bull Put Spread (Credit)": Strategia(
+        nazwa="Bull Put Spread (Credit)",
+        kategoria="📊 Spready",
+        opis="Sprzedaż put + kupno niższego put. Dostajesz premię, zarabiasz gdy NIE spada.",
+        kiedy="""✅ Oczekujesz, że cena NIE SPADNIE
+✅ Chcesz otrzymać premię z góry
+✅ Przy WYSOKIEJ IV (wyższe premie!)
+✅ Rynek boczny lub wzrostowy
+❌ NIE przed negatywnymi wydarzeniami""",
+        konstrukcja="Sprzedaż PUT wyższy K + Kupno PUT niższy K",
         max_zysk="Otrzymana premia netto",
         max_strata="Różnica strike'ów - Premia",
         breakeven="Wyższy strike - Premia",
-        greeks="Delta ⬆️ | Theta ⬆️ (korzystna!)",
-        poziom="🟡 Średni"
+        greeks="Delta ⬆️ | Theta ⬆️ KORZYSTNA!",
+        poziom="🟡",
+        uwagi="Spread kredytowy - dostajesz pieniądze na start!"
     ),
-    "Bear Call Spread": Strategia(
-        nazwa="Bear Call Spread",
-        kategoria="📊 Spread",
-        opis="Kredytowy niedźwiedzi - sprzedaż call + kupno wyższego call. Zarabiasz jeśli cena nie rośnie.",
-        kiedy="✅ Oczekujesz, że cena NIE WZROŚNIE\n✅ Chcesz natychmiastową premię\n✅ Przy wysokiej IV\n✅ Rynek boczny lub spadkowy",
-        konstrukcja="Sprzedaż CALL niższy strike + Kupno CALL wyższy strike",
+    
+    "Bear Call Spread (Credit)": Strategia(
+        nazwa="Bear Call Spread (Credit)",
+        kategoria="📊 Spready",
+        opis="Sprzedaż call + kupno wyższego call. Dostajesz premię, zarabiasz gdy NIE rośnie.",
+        kiedy="""✅ Oczekujesz, że cena NIE WZROŚNIE
+✅ Chcesz otrzymać premię z góry
+✅ Przy WYSOKIEJ IV
+✅ Rynek boczny lub spadkowy
+❌ NIE przed pozytywnymi wydarzeniami""",
+        konstrukcja="Sprzedaż CALL niższy K + Kupno CALL wyższy K",
         max_zysk="Otrzymana premia netto",
         max_strata="Różnica strike'ów - Premia",
         breakeven="Niższy strike + Premia",
-        greeks="Delta ⬇️ | Theta ⬆️ (korzystna!)",
-        poziom="🟡 Średni"
+        greeks="Delta ⬇️ | Theta ⬆️ KORZYSTNA!",
+        poziom="🟡",
+        uwagi="Spread kredytowy niedźwiedzi."
     ),
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # STRATEGIE NA ZMIENNOŚĆ
+    # 🌪️ STRATEGIE NA ZMIENNOŚĆ - KUPOWANIE
     # ═══════════════════════════════════════════════════════════════════════════
     "Long Straddle": Strategia(
         nazwa="Long Straddle",
         kategoria="🌪️ Zmienność",
-        opis="Gra na duży ruch - kupno call + put z tym samym strike. Kierunek nieważny!",
-        kiedy="✅ Przed WAŻNYMI wydarzeniami (wyniki, FDA)\n✅ Oczekujesz DUŻEGO ruchu w dowolnym kierunku\n✅ Przy NISKIEJ IV (tanie opcje)\n❌ NIE przy wysokiej IV (za drogo!)\n❌ NIE przy stabilnym rynku",
+        opis="Kupno call + put z tym samym strike. Zarabiasz na DUŻYM ruchu w dowolnym kierunku.",
+        kiedy="""✅ Przed WAŻNYMI wydarzeniami (wyniki, FDA, wybory)
+✅ Oczekujesz DUŻEGO ruchu, nie wiesz w którą stronę
+✅ Przy NISKIEJ IV (tanie opcje!)
+✅ Gdy IV jest nienormalnie niska
+❌ NIE przy wysokiej IV - przepłacasz!
+❌ NIE przy stabilnym rynku""",
         konstrukcja="Kupno CALL ATM + Kupno PUT ATM (ten sam strike)",
         max_zysk="♾️ Nieograniczony",
         max_strata="Suma obu premii",
-        breakeven="Strike ± Suma premii (dwa punkty!)",
+        breakeven="Strike ± Suma premii (DWA punkty!)",
         greeks="Delta ≈ 0 | Gamma ⬆️⬆️ | Theta ⬇️⬇️ | Vega ⬆️⬆️",
-        poziom="🟡 Średni"
+        poziom="🟡",
+        uwagi="Gra na 'eksplozję'. Kierunek nieważny, ważna siła ruchu!"
     ),
+    
     "Long Strangle": Strategia(
         nazwa="Long Strangle",
         kategoria="🌪️ Zmienność",
-        opis="Tańszy straddle - kupno OTM call + OTM put. Wymaga większego ruchu.",
-        kiedy="✅ Oczekujesz BARDZO DUŻEGO ruchu\n✅ Chcesz tańszą alternatywę dla straddle\n✅ Przy niskiej IV\n❌ Wymaga jeszcze większego ruchu niż straddle",
+        opis="Kupno OTM call + OTM put. Tańszy straddle, ale wymaga większego ruchu.",
+        kiedy="""✅ Oczekujesz BARDZO DUŻEGO ruchu
+✅ Chcesz tańszą alternatywę dla straddle
+✅ Przy NISKIEJ IV
+❌ Wymaga jeszcze większego ruchu niż straddle""",
         konstrukcja="Kupno CALL OTM + Kupno PUT OTM",
         max_zysk="♾️ Nieograniczony",
         max_strata="Suma obu premii (niższa niż straddle)",
-        breakeven="Put strike - Premia put | Call strike + Premia call",
+        breakeven="Put strike - Premia | Call strike + Premia",
         greeks="Delta ≈ 0 | Gamma ⬆️ | Theta ⬇️ | Vega ⬆️",
-        poziom="🟡 Średni"
+        poziom="🟡",
+        uwagi="Tańszy zakład na 'eksplozję' w dowolnym kierunku."
     ),
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # STRATEGIE NEUTRALNE
+    # 😴 STRATEGIE NA NISKĄ ZMIENNOŚĆ - SPRZEDAWANIE
     # ═══════════════════════════════════════════════════════════════════════════
+    "Short Straddle": Strategia(
+        nazwa="Short Straddle",
+        kategoria="😴 Neutralne",
+        opis="Sprzedaż call + put z tym samym strike. Zarabiasz gdy cena NIE rusza się.",
+        kiedy="""✅ Oczekujesz NISKIEJ zmienności
+✅ Cena pozostanie blisko strike
+✅ Przy WYSOKIEJ IV (wysokie premie!)
+✅ Po dużych ruchach (powrót do średniej)
+⚠️ RYZYKOWNE - nieograniczona strata!
+❌ NIE przed ważnymi wydarzeniami""",
+        konstrukcja="Sprzedaż CALL ATM + Sprzedaż PUT ATM",
+        max_zysk="Suma obu premii",
+        max_strata="♾️ NIEOGRANICZONA!",
+        breakeven="Strike ± Suma premii",
+        greeks="Delta ≈ 0 | Gamma ⬇️⬇️ | Theta ⬆️⬆️ | Vega ⬇️⬇️",
+        poziom="🔴",
+        uwagi="⚠️ BARDZO RYZYKOWNE! Wymaga aktywnego zarządzania."
+    ),
+    
+    "Short Strangle": Strategia(
+        nazwa="Short Strangle",
+        kategoria="😴 Neutralne",
+        opis="Sprzedaż OTM call + OTM put. Szerszy zakres zysku niż straddle.",
+        kiedy="""✅ Oczekujesz ruchu bocznego
+✅ Przy WYSOKIEJ IV
+✅ Cena pozostanie w zakresie między strike'ami
+⚠️ RYZYKOWNE - nieograniczona strata!
+❌ NIE przed ważnymi wydarzeniami""",
+        konstrukcja="Sprzedaż CALL OTM + Sprzedaż PUT OTM",
+        max_zysk="Suma obu premii",
+        max_strata="♾️ NIEOGRANICZONA!",
+        breakeven="Put strike - Premia | Call strike + Premia",
+        greeks="Delta ≈ 0 | Gamma ⬇️ | Theta ⬆️ | Vega ⬇️",
+        poziom="🔴",
+        uwagi="⚠️ RYZYKOWNE! Szerszy zakres niż straddle, ale wciąż niebezpieczne."
+    ),
+    
     "Iron Condor": Strategia(
         nazwa="Iron Condor",
-        kategoria="😴 Neutralna",
-        opis="Król strategii dochodowych - zarabiasz na BRAKU ruchu. Cztery opcje tworzą tunel zysku.",
-        kiedy="✅ Oczekujesz NISKIEJ zmienności\n✅ Rynek boczny, konsolidacja\n✅ Przy WYSOKIEJ IV (wyższe premie!)\n✅ Po dużych ruchach (powrót do średniej)\n❌ NIE przed ważnymi wydarzeniami",
+        kategoria="😴 Neutralne",
+        opis="KRÓL strategii dochodowych! 4 opcje tworzące tunel zysku. Zarabiasz na BRAKU ruchu.",
+        kiedy="""✅ Oczekujesz NISKIEJ zmienności
+✅ Rynek boczny, konsolidacja
+✅ Przy WYSOKIEJ IV (wyższe premie!)
+✅ Po dużych ruchach
+✅ Regularny dochód co miesiąc
+❌ NIE przed ważnymi wydarzeniami""",
         konstrukcja="Sprzedaż PUT + Kupno niższego PUT + Sprzedaż CALL + Kupno wyższego CALL",
         max_zysk="Otrzymana premia netto",
-        max_strata="Szerokość spreadu - Premia",
+        max_strata="Szerokość spreadu - Premia (OGRANICZONA!)",
         breakeven="Wewnętrzne strike'i ± Premia",
-        greeks="Delta ≈ 0 | Gamma ⬇️ | Theta ⬆️⬆️ (super!) | Vega ⬇️",
-        poziom="🟡 Średni"
+        greeks="Delta ≈ 0 | Gamma ⬇️ | Theta ⬆️⬆️ SUPER! | Vega ⬇️",
+        poziom="🟡",
+        uwagi="""💰 Najpopularniejsza strategia dochodowa profesjonalistów!
+Ograniczone ryzyko w obie strony. Czas pracuje DLA Ciebie."""
     ),
+    
     "Iron Butterfly": Strategia(
         nazwa="Iron Butterfly",
-        kategoria="😴 Neutralna",
-        opis="Precyzyjny neutralny - wszystkie sprzedane opcje mają ten sam strike. Maksymalny zysk przy dokładnej cenie.",
-        kiedy="✅ Oczekujesz, że cena pozostanie DOKŁADNIE przy strike\n✅ Przy bardzo wysokiej IV\n✅ Węższy zakres zysku niż Iron Condor\n❌ Wymaga większej precyzji",
-        konstrukcja="Sprzedaż PUT ATM + Kupno PUT OTM + Sprzedaż CALL ATM + Kupno CALL OTM",
+        kategoria="😴 Neutralne",
+        opis="Jak Iron Condor, ale wszystkie sprzedane opcje mają TEN SAM strike. Precyzyjny zakład.",
+        kiedy="""✅ Oczekujesz, że cena będzie DOKŁADNIE przy strike
+✅ Przy bardzo wysokiej IV
+✅ Wyższa premia niż Iron Condor
+❌ Węższy zakres zysku - wymaga precyzji""",
+        konstrukcja="Kupno PUT OTM + Sprzedaż PUT ATM + Sprzedaż CALL ATM + Kupno CALL OTM",
         max_zysk="Otrzymana premia netto",
         max_strata="Szerokość skrzydła - Premia",
         breakeven="Środkowy strike ± Premia",
         greeks="Delta ≈ 0 | Gamma ⬇️⬇️ | Theta ⬆️ | Vega ⬇️",
-        poziom="🔴 Zaawansowany"
+        poziom="🔴",
+        uwagi="Wyższa premia, ale wymaga większej precyzji."
     ),
-    "Long Butterfly": Strategia(
-        nazwa="Long Butterfly",
-        kategoria="😴 Neutralna",
-        opis="Tani zakład na konkretną cenę - maksymalny zysk gdy cena = środkowy strike.",
-        kiedy="✅ Oczekujesz, że cena będzie przy KONKRETNYM poziomie\n✅ Niski koszt wejścia\n✅ Przed wygaśnięciem, gdy znasz cel\n❌ Wąski zakres zysku",
+    
+    "Long Call Butterfly": Strategia(
+        nazwa="Long Call Butterfly",
+        kategoria="😴 Neutralne",
+        opis="Kupno 1 call ITM + sprzedaż 2 call ATM + kupno 1 call OTM. Niski koszt, precyzyjny zakład.",
+        kiedy="""✅ Oczekujesz, że cena będzie przy KONKRETNYM poziomie
+✅ Niski koszt wejścia
+✅ Blisko wygaśnięcia gdy znasz cel
+❌ Wąski zakres zysku""",
         konstrukcja="Kupno CALL ITM + Sprzedaż 2× CALL ATM + Kupno CALL OTM",
-        max_zysk="(Szerokość skrzydła - Premia) przy środkowym strike",
-        max_strata="Zapłacona premia netto (niska!)",
-        breakeven="Środkowy strike ± Szerokość - Premia",
-        greeks="Delta ≈ 0 | Gamma ujemna przy środku | Theta ⬆️",
-        poziom="🔴 Zaawansowany"
+        max_zysk="Szerokość - Koszt (przy środkowym strike)",
+        max_strata="Zapłacona premia (niska!)",
+        breakeven="Środkowy strike ± (Szerokość - Koszt)",
+        greeks="Delta ≈ 0 | Gamma ⬇️ przy środku | Theta ⬆️",
+        poziom="🔴",
+        uwagi="Tani zakład na konkretną cenę w dniu wygaśnięcia."
+    ),
+    
+    "Long Put Butterfly": Strategia(
+        nazwa="Long Put Butterfly",
+        kategoria="😴 Neutralne",
+        opis="To samo co call butterfly, ale z opcjami put. Ten sam profil zysku.",
+        kiedy="""✅ Oczekujesz konkretnej ceny
+✅ Czasem lepsze ceny przy put
+✅ Niski koszt""",
+        konstrukcja="Kupno PUT OTM + Sprzedaż 2× PUT ATM + Kupno PUT ITM",
+        max_zysk="Szerokość - Koszt",
+        max_strata="Zapłacona premia",
+        breakeven="Środkowy strike ± (Szerokość - Koszt)",
+        greeks="Delta ≈ 0 | Theta ⬆️",
+        poziom="🔴",
+        uwagi="Alternatywa dla call butterfly - porównaj ceny."
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 📅 STRATEGIE KALENDARZOWE (CALENDAR SPREADS)
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Calendar Call Spread": Strategia(
+        nazwa="Calendar Call Spread",
+        kategoria="📅 Kalendarzowe",
+        opis="Sprzedaż call bliski termin + kupno call daleki termin. Zarabiasz na różnicy theta.",
+        kiedy="""✅ Oczekujesz stabilnej ceny w krótkim terminie
+✅ Chcesz wykorzystać szybszy rozpad czasu bliskiej opcji
+✅ Przy niskiej IV (spodziewasz się wzrostu)
+❌ Nie przy bardzo wysokiej IV""",
+        konstrukcja="Sprzedaż CALL (bliski termin) + Kupno CALL (daleki termin) - TEN SAM strike",
+        max_zysk="Różnica premii gdy cena = strike przy bliskim wygaśnięciu",
+        max_strata="Zapłacona premia netto",
+        breakeven="Złożony - zależy od IV",
+        greeks="Delta ≈ 0 | Theta ⬆️ | Vega ⬆️ (zyskujesz na wzroście IV!)",
+        poziom="🔴",
+        uwagi="Gra na różnicę w rozpadzie czasowym. Zyskujesz też na wzroście IV!"
+    ),
+    
+    "Calendar Put Spread": Strategia(
+        nazwa="Calendar Put Spread",
+        kategoria="📅 Kalendarzowe",
+        opis="Sprzedaż put bliski termin + kupno put daleki termin.",
+        kiedy="""✅ Oczekujesz stabilnej ceny
+✅ Chcesz wykorzystać theta
+✅ Alternatywa dla calendar call""",
+        konstrukcja="Sprzedaż PUT (bliski termin) + Kupno PUT (daleki termin) - TEN SAM strike",
+        max_zysk="Różnica premii przy strike",
+        max_strata="Zapłacona premia netto",
+        breakeven="Złożony",
+        greeks="Delta ≈ 0 | Theta ⬆️ | Vega ⬆️",
+        poziom="🔴",
+        uwagi="Porównaj z calendar call - czasem lepsza cena."
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 📐 STRATEGIE DIAGONALNE
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Diagonal Call Spread": Strategia(
+        nazwa="Diagonal Call Spread",
+        kategoria="📐 Diagonalne",
+        opis="Calendar spread + vertical spread. Kupno dalekiego call ITM + sprzedaż bliskiego call OTM.",
+        kiedy="""✅ Lekko byczy pogląd
+✅ Chcesz generować dochód przez sprzedaż call
+✅ Posiadasz LEAPS (długoterminowe opcje)
+❌ Złożona strategia""",
+        konstrukcja="Kupno CALL (daleki, niższy K) + Sprzedaż CALL (bliski, wyższy K)",
+        max_zysk="Złożony - zależy od wielu czynników",
+        max_strata="Ograniczona do debetu",
+        breakeven="Złożony",
+        greeks="Delta ⬆️ mała | Theta ⬆️ | Vega zmienna",
+        poziom="🔴",
+        uwagi="Poor Man's Covered Call - tańsza alternatywa dla covered call."
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ⚖️ RATIO SPREADS
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Call Ratio Spread": Strategia(
+        nazwa="Call Ratio Spread",
+        kategoria="⚖️ Ratio",
+        opis="Kupno 1 call + sprzedaż 2 call wyższych. Darmowy lub kredytowy zakład na umiarkowany wzrost.",
+        kiedy="""✅ Oczekujesz UMIARKOWANEGO wzrostu do konkretnego poziomu
+✅ Chcesz wejść za darmo lub z kredytem
+⚠️ Ryzyko przy silnym wzroście!
+❌ NIE gdy oczekujesz silnego wzrostu""",
+        konstrukcja="Kupno 1 CALL + Sprzedaż 2 CALL (wyższy strike)",
+        max_zysk="(Wyższy K - Niższy K) + Kredyt przy wyższym strike",
+        max_strata="♾️ Nieograniczona powyżej górnego BE!",
+        breakeven="Dwa punkty - dolny i górny",
+        greeks="Delta zmienna | Gamma ujemna przy górze",
+        poziom="🔴",
+        uwagi="⚠️ Uwaga na nieograniczone ryzyko przy silnym wzroście!"
+    ),
+    
+    "Put Ratio Spread": Strategia(
+        nazwa="Put Ratio Spread",
+        kategoria="⚖️ Ratio",
+        opis="Kupno 1 put + sprzedaż 2 put niższych. Zakład na umiarkowany spadek.",
+        kiedy="""✅ Oczekujesz UMIARKOWANEGO spadku
+✅ Chcesz wejść tanio/za darmo
+⚠️ Ryzyko przy silnym spadku!
+❌ NIE przy oczekiwaniu krachu""",
+        konstrukcja="Kupno 1 PUT + Sprzedaż 2 PUT (niższy strike)",
+        max_zysk="(Wyższy K - Niższy K) + Kredyt przy niższym strike",
+        max_strata="Może być duża przy silnym spadku",
+        breakeven="Dwa punkty",
+        greeks="Delta zmienna",
+        poziom="🔴",
+        uwagi="⚠️ Ryzyko przy krachu rynku!"
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 🎯 STRATEGIE SYNTETYCZNE
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Synthetic Long Stock": Strategia(
+        nazwa="Synthetic Long Stock",
+        kategoria="🎯 Syntetyczne",
+        opis="Kupno call + sprzedaż put (ten sam strike). Zachowuje się jak posiadanie akcji.",
+        kiedy="""✅ Chcesz ekspozycję na akcje bez ich kupowania
+✅ Niższy wymóg kapitałowy
+✅ Przy opcjach europejskich
+❌ Ryzyko przydziału przy amerykańskich""",
+        konstrukcja="Kupno CALL ATM + Sprzedaż PUT ATM (ten sam strike)",
+        max_zysk="♾️ Nieograniczony",
+        max_strata="Strike (jak przy akcjach)",
+        breakeven="Strike + Koszt netto",
+        greeks="Delta ≈ 1 (jak akcje!)",
+        poziom="🟡",
+        uwagi="Tańszy sposób na ekspozycję na akcje. Put-Call Parity w praktyce."
+    ),
+    
+    "Synthetic Short Stock": Strategia(
+        nazwa="Synthetic Short Stock",
+        kategoria="🎯 Syntetyczne",
+        opis="Kupno put + sprzedaż call (ten sam strike). Zachowuje się jak short na akcjach.",
+        kiedy="""✅ Chcesz shortować bez pożyczania akcji
+✅ Gdy akcje są trudne do pożyczenia
+✅ Bez ryzyka short squeeze""",
+        konstrukcja="Kupno PUT ATM + Sprzedaż CALL ATM (ten sam strike)",
+        max_zysk="Strike - Koszt netto",
+        max_strata="♾️ Nieograniczona",
+        breakeven="Strike - Kredyt netto",
+        greeks="Delta ≈ -1 (jak short akcje!)",
+        poziom="🟡",
+        uwagi="Syntetyczny short bez pożyczania akcji."
+    ),
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 🏦 STRATEGIE ARBITRAŻOWE
+    # ═══════════════════════════════════════════════════════════════════════════
+    "Box Spread": Strategia(
+        nazwa="Box Spread",
+        kategoria="🏦 Arbitraż",
+        opis="Bull call spread + bear put spread. Syntetyczna pożyczka/lokata o znanym zwrocie.",
+        kiedy="""✅ Arbitraż cenowy (instytucje)
+✅ Syntetyczne pożyczanie środków
+✅ Różnica powinna = stopa wolna od ryzyka
+❌ Mało praktyczne dla indywidualnych""",
+        konstrukcja="Kupno CALL K1 + Sprzedaż CALL K2 + Kupno PUT K2 + Sprzedaż PUT K1",
+        max_zysk="Różnica strike'ów - Koszt (= stopa %)",
+        max_strata="Brak (jeśli prawidłowo wycenione)",
+        breakeven="Nie dotyczy",
+        greeks="Wszystkie ≈ 0",
+        poziom="🔴",
+        uwagi="Używane przez instytucje do syntetycznego pożyczania."
+    ),
+    
+    "Conversion": Strategia(
+        nazwa="Conversion",
+        kategoria="🏦 Arbitraż",
+        opis="Long stock + long put + short call. Arbitraż na put-call parity.",
+        kiedy="""✅ Wykorzystanie błędnej wyceny
+✅ Gdy opcje są źle wycenione względem siebie
+❌ Wymaga bardzo niskich kosztów transakcji""",
+        konstrukcja="100 akcji + Kupno PUT + Sprzedaż CALL (ten sam strike)",
+        max_zysk="Różnica w błędnej wycenie",
+        max_strata="Brak (pozycja bez ryzyka)",
+        breakeven="Nie dotyczy",
+        greeks="Delta = 0 | Wszystkie ≈ 0",
+        poziom="🔴",
+        uwagi="Czysta strategia arbitrażowa dla profesjonalistów."
+    ),
+    
+    "Reversal": Strategia(
+        nazwa="Reversal",
+        kategoria="🏦 Arbitraż",
+        opis="Short stock + short put + long call. Odwrotność conversion.",
+        kiedy="""✅ Wykorzystanie błędnej wyceny w drugą stronę
+❌ Wymaga możliwości shortowania""",
+        konstrukcja="Short 100 akcji + Sprzedaż PUT + Kupno CALL (ten sam strike)",
+        max_zysk="Różnica w błędnej wycenie",
+        max_strata="Brak",
+        breakeven="Nie dotyczy",
+        greeks="Delta = 0",
+        poziom="🔴",
+        uwagi="Odwrotność conversion. Dla market makerów."
     ),
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FUNKCJE PAYOFF DLA STRATEGII
+# FUNKCJE PAYOFF
 # ══════════════════════════════════════════════════════════════════════════════
-def payoff_long_call(x, S, K, T, σ):
-    """Payoff dla Long Call"""
-    premia = bs(S, K, T, R, σ, "call")["cena"]
-    return np.maximum(x - K, 0) - premia, premia, {"delta": bs(S, K, T, R, σ, "call")["delta"], 
-                                                    "theta": bs(S, K, T, R, σ, "call")["theta"],
-                                                    "vega": bs(S, K, T, R, σ, "call")["vega"]}
-
-def payoff_long_put(x, S, K, T, σ):
-    """Payoff dla Long Put"""
-    premia = bs(S, K, T, R, σ, "put")["cena"]
-    return np.maximum(K - x, 0) - premia, premia, {"delta": bs(S, K, T, R, σ, "put")["delta"],
-                                                    "theta": bs(S, K, T, R, σ, "put")["theta"],
-                                                    "vega": bs(S, K, T, R, σ, "put")["vega"]}
-
-def payoff_covered_call(x, S, K, T, σ):
-    """Payoff dla Covered Call"""
-    premia = bs(S, K, T, R, σ, "call")["cena"]
-    pozycja_akcji = x - S
-    krotka_call = premia - np.maximum(x - K, 0)
-    g = bs(S, K, T, R, σ, "call")
-    return pozycja_akcji + krotka_call, premia, {"delta": 1 - g["delta"], "theta": -g["theta"], "vega": -g["vega"]}
-
-def payoff_protective_put(x, S, K, T, σ):
-    """Payoff dla Protective Put"""
-    premia = bs(S, K, T, R, σ, "put")["cena"]
-    pozycja_akcji = x - S
-    dluga_put = np.maximum(K - x, 0) - premia
-    g = bs(S, K, T, R, σ, "put")
-    return pozycja_akcji + dluga_put, premia, {"delta": 1 + g["delta"], "theta": g["theta"], "vega": g["vega"]}
-
-def payoff_collar(x, S, K_put, K_call, T, σ):
-    """Payoff dla Collar"""
-    premia_put = bs(S, K_put, T, R, σ, "put")["cena"]
-    premia_call = bs(S, K_call, T, R, σ, "call")["cena"]
-    koszt = premia_put - premia_call
-    pozycja = (x - S) + np.maximum(K_put - x, 0) - np.maximum(x - K_call, 0)
-    return pozycja - koszt, koszt, {"delta": 0.5, "theta": 0, "vega": 0}
-
-def payoff_bull_call_spread(x, S, K1, K2, T, σ):
-    """Payoff dla Bull Call Spread"""
-    c1 = bs(S, K1, T, R, σ, "call")["cena"]
-    c2 = bs(S, K2, T, R, σ, "call")["cena"]
-    koszt = c1 - c2
-    g1, g2 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call")
-    return np.maximum(x - K1, 0) - np.maximum(x - K2, 0) - koszt, koszt, {
-        "delta": g1["delta"] - g2["delta"], 
-        "theta": g1["theta"] - g2["theta"],
-        "vega": g1["vega"] - g2["vega"]
-    }
-
-def payoff_bear_put_spread(x, S, K1, K2, T, σ):
-    """Payoff dla Bear Put Spread (K1 niższy, K2 wyższy)"""
-    p1 = bs(S, K1, T, R, σ, "put")["cena"]
-    p2 = bs(S, K2, T, R, σ, "put")["cena"]
-    koszt = p2 - p1
-    g1, g2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
-    return np.maximum(K2 - x, 0) - np.maximum(K1 - x, 0) - koszt, koszt, {
-        "delta": g2["delta"] - g1["delta"],
-        "theta": g2["theta"] - g1["theta"],
-        "vega": g2["vega"] - g1["vega"]
-    }
-
-def payoff_bull_put_spread(x, S, K1, K2, T, σ):
-    """Payoff dla Bull Put Spread (kredytowy) - K1 niższy, K2 wyższy"""
-    p1 = bs(S, K1, T, R, σ, "put")["cena"]
-    p2 = bs(S, K2, T, R, σ, "put")["cena"]
-    kredyt = p2 - p1
-    g1, g2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
-    return kredyt - np.maximum(K2 - x, 0) + np.maximum(K1 - x, 0), -kredyt, {
-        "delta": -(g2["delta"] - g1["delta"]),
-        "theta": -(g2["theta"] - g1["theta"]),
-        "vega": -(g2["vega"] - g1["vega"])
-    }
-
-def payoff_bear_call_spread(x, S, K1, K2, T, σ):
-    """Payoff dla Bear Call Spread (kredytowy) - K1 niższy, K2 wyższy"""
-    c1 = bs(S, K1, T, R, σ, "call")["cena"]
-    c2 = bs(S, K2, T, R, σ, "call")["cena"]
-    kredyt = c1 - c2
-    g1, g2 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call")
-    return kredyt - np.maximum(x - K1, 0) + np.maximum(x - K2, 0), -kredyt, {
-        "delta": -(g1["delta"] - g2["delta"]),
-        "theta": -(g1["theta"] - g2["theta"]),
-        "vega": -(g1["vega"] - g2["vega"])
-    }
-
-def payoff_long_straddle(x, S, K, T, σ):
-    """Payoff dla Long Straddle"""
-    c = bs(S, K, T, R, σ, "call")
-    p = bs(S, K, T, R, σ, "put")
-    koszt = c["cena"] + p["cena"]
-    return np.maximum(x - K, 0) + np.maximum(K - x, 0) - koszt, koszt, {
-        "delta": c["delta"] + p["delta"],
-        "theta": c["theta"] + p["theta"],
-        "vega": c["vega"] + p["vega"]
-    }
-
-def payoff_long_strangle(x, S, K_put, K_call, T, σ):
-    """Payoff dla Long Strangle"""
-    c = bs(S, K_call, T, R, σ, "call")
-    p = bs(S, K_put, T, R, σ, "put")
-    koszt = c["cena"] + p["cena"]
-    return np.maximum(x - K_call, 0) + np.maximum(K_put - x, 0) - koszt, koszt, {
-        "delta": c["delta"] + p["delta"],
-        "theta": c["theta"] + p["theta"],
-        "vega": c["vega"] + p["vega"]
-    }
-
-def payoff_iron_condor(x, S, K1, K2, K3, K4, T, σ):
-    """Payoff dla Short Iron Condor (K1<K2<K3<K4)"""
-    # Kupno put K1, sprzedaż put K2, sprzedaż call K3, kupno call K4
-    p1 = bs(S, K1, T, R, σ, "put")["cena"]
-    p2 = bs(S, K2, T, R, σ, "put")["cena"]
-    c3 = bs(S, K3, T, R, σ, "call")["cena"]
-    c4 = bs(S, K4, T, R, σ, "call")["cena"]
-    kredyt = (p2 - p1) + (c3 - c4)
+def get_payoff(strategia_nazwa, x, S, params, T, σ):
+    """Uniwersalna funkcja zwracająca payoff dla dowolnej strategii"""
     
-    payoff = (kredyt 
-              - np.maximum(K2 - x, 0) + np.maximum(K1 - x, 0)  # Put spread
-              - np.maximum(x - K3, 0) + np.maximum(x - K4, 0))  # Call spread
-    return payoff, -kredyt, {"delta": 0, "theta": 0.05, "vega": -0.1}
-
-def payoff_iron_butterfly(x, S, K_wing_low, K_mid, K_wing_high, T, σ):
-    """Payoff dla Short Iron Butterfly"""
-    p_low = bs(S, K_wing_low, T, R, σ, "put")["cena"]
-    p_mid = bs(S, K_mid, T, R, σ, "put")["cena"]
-    c_mid = bs(S, K_mid, T, R, σ, "call")["cena"]
-    c_high = bs(S, K_wing_high, T, R, σ, "call")["cena"]
+    # === PODSTAWOWE ===
+    if strategia_nazwa == "Long Call":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "call")
+        return np.maximum(x - K, 0) - g["cena"], g["cena"], g
     
-    kredyt = (p_mid - p_low) + (c_mid - c_high)
+    elif strategia_nazwa == "Long Put":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "put")
+        return np.maximum(K - x, 0) - g["cena"], g["cena"], g
     
-    payoff = (kredyt
-              - np.maximum(K_mid - x, 0) + np.maximum(K_wing_low - x, 0)
-              - np.maximum(x - K_mid, 0) + np.maximum(x - K_wing_high, 0))
-    return payoff, -kredyt, {"delta": 0, "theta": 0.08, "vega": -0.15}
-
-def payoff_long_butterfly(x, S, K1, K2, K3, T, σ):
-    """Payoff dla Long Call Butterfly (K1 < K2 < K3)"""
-    c1 = bs(S, K1, T, R, σ, "call")["cena"]
-    c2 = bs(S, K2, T, R, σ, "call")["cena"]
-    c3 = bs(S, K3, T, R, σ, "call")["cena"]
-    koszt = c1 - 2*c2 + c3
+    elif strategia_nazwa == "Short Call (Naked)":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "call")
+        return g["cena"] - np.maximum(x - K, 0), -g["cena"], {k: -v for k, v in g.items()}
     
-    payoff = (np.maximum(x - K1, 0) 
-              - 2 * np.maximum(x - K2, 0) 
-              + np.maximum(x - K3, 0) 
-              - koszt)
-    return payoff, koszt, {"delta": 0, "theta": 0.02, "vega": -0.05}
+    elif strategia_nazwa == "Short Put (Cash-Secured)":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "put")
+        return g["cena"] - np.maximum(K - x, 0), -g["cena"], {k: -v for k, v in g.items()}
+    
+    # === DOCHODOWE ===
+    elif strategia_nazwa == "Covered Call":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "call")
+        akcje = x - S
+        short_call = g["cena"] - np.maximum(x - K, 0)
+        return akcje + short_call, g["cena"], {"delta": 1 - g["delta"], "theta": -g["theta"], "vega": -g["vega"], "cena": g["cena"]}
+    
+    elif strategia_nazwa == "Covered Put":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "put")
+        short_akcje = S - x
+        short_put = g["cena"] - np.maximum(K - x, 0)
+        return short_akcje + short_put, g["cena"], {"delta": -1 - g["delta"], "theta": -g["theta"], "vega": -g["vega"], "cena": g["cena"]}
+    
+    # === ZABEZPIECZAJĄCE ===
+    elif strategia_nazwa == "Protective Put":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "put")
+        akcje = x - S
+        long_put = np.maximum(K - x, 0) - g["cena"]
+        return akcje + long_put, g["cena"], {"delta": 1 + g["delta"], "theta": g["theta"], "vega": g["vega"], "cena": g["cena"]}
+    
+    elif strategia_nazwa == "Protective Call":
+        K = params["K"]
+        g = bs(S, K, T, R, σ, "call")
+        short_akcje = S - x
+        long_call = np.maximum(x - K, 0) - g["cena"]
+        return short_akcje + long_call, g["cena"], {"delta": -1 + g["delta"], "theta": g["theta"], "vega": g["vega"], "cena": g["cena"]}
+    
+    elif strategia_nazwa == "Collar (Zero-Cost)":
+        K_put, K_call = params["K_put"], params["K_call"]
+        gp, gc = bs(S, K_put, T, R, σ, "put"), bs(S, K_call, T, R, σ, "call")
+        koszt = gp["cena"] - gc["cena"]
+        akcje = x - S
+        long_put = np.maximum(K_put - x, 0) - gp["cena"]
+        short_call = gc["cena"] - np.maximum(x - K_call, 0)
+        return akcje + long_put + short_call, koszt, {"delta": 1 + gp["delta"] - gc["delta"], "theta": gp["theta"] - gc["theta"], "vega": gp["vega"] - gc["vega"], "cena": koszt}
+    
+    # === SPREADY ===
+    elif strategia_nazwa == "Bull Call Spread":
+        K1, K2 = params["K1"], params["K2"]
+        g1, g2 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call")
+        koszt = g1["cena"] - g2["cena"]
+        return np.maximum(x - K1, 0) - np.maximum(x - K2, 0) - koszt, koszt, {"delta": g1["delta"] - g2["delta"], "theta": g1["theta"] - g2["theta"], "vega": g1["vega"] - g2["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Bear Put Spread":
+        K1, K2 = params["K1"], params["K2"]  # K1 niższy, K2 wyższy
+        g1, g2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
+        koszt = g2["cena"] - g1["cena"]
+        return np.maximum(K2 - x, 0) - np.maximum(K1 - x, 0) - koszt, koszt, {"delta": g2["delta"] - g1["delta"], "theta": g2["theta"] - g1["theta"], "vega": g2["vega"] - g1["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Bull Put Spread (Credit)":
+        K1, K2 = params["K1"], params["K2"]  # K1 niższy, K2 wyższy
+        g1, g2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
+        kredyt = g2["cena"] - g1["cena"]
+        return kredyt - np.maximum(K2 - x, 0) + np.maximum(K1 - x, 0), -kredyt, {"delta": -(g2["delta"] - g1["delta"]), "theta": -(g2["theta"] - g1["theta"]), "vega": -(g2["vega"] - g1["vega"]), "cena": -kredyt}
+    
+    elif strategia_nazwa == "Bear Call Spread (Credit)":
+        K1, K2 = params["K1"], params["K2"]  # K1 niższy, K2 wyższy
+        g1, g2 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call")
+        kredyt = g1["cena"] - g2["cena"]
+        return kredyt - np.maximum(x - K1, 0) + np.maximum(x - K2, 0), -kredyt, {"delta": -(g1["delta"] - g2["delta"]), "theta": -(g1["theta"] - g2["theta"]), "vega": -(g1["vega"] - g2["vega"]), "cena": -kredyt}
+    
+    # === ZMIENNOŚĆ ===
+    elif strategia_nazwa == "Long Straddle":
+        K = params["K"]
+        gc, gp = bs(S, K, T, R, σ, "call"), bs(S, K, T, R, σ, "put")
+        koszt = gc["cena"] + gp["cena"]
+        return np.maximum(x - K, 0) + np.maximum(K - x, 0) - koszt, koszt, {"delta": gc["delta"] + gp["delta"], "theta": gc["theta"] + gp["theta"], "vega": gc["vega"] + gp["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Long Strangle":
+        K_put, K_call = params["K_put"], params["K_call"]
+        gc, gp = bs(S, K_call, T, R, σ, "call"), bs(S, K_put, T, R, σ, "put")
+        koszt = gc["cena"] + gp["cena"]
+        return np.maximum(x - K_call, 0) + np.maximum(K_put - x, 0) - koszt, koszt, {"delta": gc["delta"] + gp["delta"], "theta": gc["theta"] + gp["theta"], "vega": gc["vega"] + gp["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Short Straddle":
+        K = params["K"]
+        gc, gp = bs(S, K, T, R, σ, "call"), bs(S, K, T, R, σ, "put")
+        kredyt = gc["cena"] + gp["cena"]
+        return kredyt - np.maximum(x - K, 0) - np.maximum(K - x, 0), -kredyt, {"delta": -(gc["delta"] + gp["delta"]), "theta": -(gc["theta"] + gp["theta"]), "vega": -(gc["vega"] + gp["vega"]), "cena": -kredyt}
+    
+    elif strategia_nazwa == "Short Strangle":
+        K_put, K_call = params["K_put"], params["K_call"]
+        gc, gp = bs(S, K_call, T, R, σ, "call"), bs(S, K_put, T, R, σ, "put")
+        kredyt = gc["cena"] + gp["cena"]
+        return kredyt - np.maximum(x - K_call, 0) - np.maximum(K_put - x, 0), -kredyt, {"delta": -(gc["delta"] + gp["delta"]), "theta": -(gc["theta"] + gp["theta"]), "vega": -(gc["vega"] + gp["vega"]), "cena": -kredyt}
+    
+    # === NEUTRALNE ===
+    elif strategia_nazwa == "Iron Condor":
+        K1, K2, K3, K4 = params["K1"], params["K2"], params["K3"], params["K4"]
+        gp1, gp2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
+        gc3, gc4 = bs(S, K3, T, R, σ, "call"), bs(S, K4, T, R, σ, "call")
+        kredyt = (gp2["cena"] - gp1["cena"]) + (gc3["cena"] - gc4["cena"])
+        payoff = kredyt - np.maximum(K2 - x, 0) + np.maximum(K1 - x, 0) - np.maximum(x - K3, 0) + np.maximum(x - K4, 0)
+        return payoff, -kredyt, {"delta": 0, "theta": 0.05, "vega": -0.1, "cena": -kredyt}
+    
+    elif strategia_nazwa == "Iron Butterfly":
+        K_low, K_mid, K_high = params["K_low"], params["K_mid"], params["K_high"]
+        gp_low, gp_mid = bs(S, K_low, T, R, σ, "put"), bs(S, K_mid, T, R, σ, "put")
+        gc_mid, gc_high = bs(S, K_mid, T, R, σ, "call"), bs(S, K_high, T, R, σ, "call")
+        kredyt = (gp_mid["cena"] - gp_low["cena"]) + (gc_mid["cena"] - gc_high["cena"])
+        payoff = kredyt - np.maximum(K_mid - x, 0) + np.maximum(K_low - x, 0) - np.maximum(x - K_mid, 0) + np.maximum(x - K_high, 0)
+        return payoff, -kredyt, {"delta": 0, "theta": 0.08, "vega": -0.15, "cena": -kredyt}
+    
+    elif strategia_nazwa in ["Long Call Butterfly", "Long Put Butterfly"]:
+        K1, K2, K3 = params["K1"], params["K2"], params["K3"]
+        if "Call" in strategia_nazwa:
+            g1, g2, g3 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call"), bs(S, K3, T, R, σ, "call")
+            koszt = g1["cena"] - 2*g2["cena"] + g3["cena"]
+            payoff = np.maximum(x - K1, 0) - 2*np.maximum(x - K2, 0) + np.maximum(x - K3, 0) - koszt
+        else:
+            g1, g2, g3 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put"), bs(S, K3, T, R, σ, "put")
+            koszt = g3["cena"] - 2*g2["cena"] + g1["cena"]
+            payoff = np.maximum(K3 - x, 0) - 2*np.maximum(K2 - x, 0) + np.maximum(K1 - x, 0) - koszt
+        return payoff, koszt, {"delta": 0, "theta": 0.02, "vega": -0.05, "cena": koszt}
+    
+    # === KALENDARZOWE ===
+    elif strategia_nazwa in ["Calendar Call Spread", "Calendar Put Spread"]:
+        K = params["K"]
+        T_near, T_far = params.get("T_near", T*0.5), params.get("T_far", T)
+        typ = "call" if "Call" in strategia_nazwa else "put"
+        g_near = bs(S, K, T_near, R, σ, typ)
+        g_far = bs(S, K, T_far, R, σ, typ)
+        koszt = g_far["cena"] - g_near["cena"]
+        # Uproszczony payoff przy wygaśnięciu bliższej opcji
+        if typ == "call":
+            payoff = g_far["cena"] - koszt - np.maximum(x - K, 0) + g_near["cena"]
+        else:
+            payoff = g_far["cena"] - koszt - np.maximum(K - x, 0) + g_near["cena"]
+        # Maksymalny zysk przy strike
+        max_at_strike = g_far["cena"] - koszt
+        payoff = np.where(np.abs(x - K) < S*0.1, max_at_strike, payoff * 0.3)
+        return payoff, koszt, {"delta": 0, "theta": 0.03, "vega": 0.1, "cena": koszt}
+    
+    # === SYNTETYCZNE ===
+    elif strategia_nazwa == "Synthetic Long Stock":
+        K = params["K"]
+        gc, gp = bs(S, K, T, R, σ, "call"), bs(S, K, T, R, σ, "put")
+        koszt = gc["cena"] - gp["cena"]
+        return (x - K) - koszt, koszt, {"delta": 1, "theta": gc["theta"] - gp["theta"], "vega": gc["vega"] - gp["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Synthetic Short Stock":
+        K = params["K"]
+        gc, gp = bs(S, K, T, R, σ, "call"), bs(S, K, T, R, σ, "put")
+        kredyt = gc["cena"] - gp["cena"]
+        return (K - x) + kredyt, -kredyt, {"delta": -1, "theta": -(gc["theta"] - gp["theta"]), "vega": -(gc["vega"] - gp["vega"]), "cena": -kredyt}
+    
+    # === RATIO ===
+    elif strategia_nazwa == "Call Ratio Spread":
+        K1, K2 = params["K1"], params["K2"]
+        g1, g2 = bs(S, K1, T, R, σ, "call"), bs(S, K2, T, R, σ, "call")
+        koszt = g1["cena"] - 2*g2["cena"]
+        payoff = np.maximum(x - K1, 0) - 2*np.maximum(x - K2, 0) - koszt
+        return payoff, koszt, {"delta": g1["delta"] - 2*g2["delta"], "theta": g1["theta"] - 2*g2["theta"], "vega": g1["vega"] - 2*g2["vega"], "cena": koszt}
+    
+    elif strategia_nazwa == "Put Ratio Spread":
+        K1, K2 = params["K1"], params["K2"]  # K1 niższy, K2 wyższy
+        g1, g2 = bs(S, K1, T, R, σ, "put"), bs(S, K2, T, R, σ, "put")
+        koszt = g2["cena"] - 2*g1["cena"]
+        payoff = np.maximum(K2 - x, 0) - 2*np.maximum(K1 - x, 0) - koszt
+        return payoff, koszt, {"delta": g2["delta"] - 2*g1["delta"], "theta": g2["theta"] - 2*g1["theta"], "vega": g2["vega"] - 2*g1["vega"], "cena": koszt}
+    
+    # === ARBITRAŻ ===
+    elif strategia_nazwa in ["Box Spread", "Conversion", "Reversal"]:
+        # Te strategie mają płaski profil - zysk = stopa %
+        K = params.get("K", S)
+        zysk = K * R * T / 365 * 100
+        return np.full_like(x, zysk), 0, {"delta": 0, "theta": 0, "vega": 0, "cena": 0}
+    
+    # === DIAGONALNE (uproszczone) ===
+    elif strategia_nazwa == "Diagonal Call Spread":
+        K1, K2 = params["K1"], params["K2"]
+        g1 = bs(S, K1, T * 2, R, σ, "call")  # daleki termin
+        g2 = bs(S, K2, T, R, σ, "call")  # bliski termin
+        koszt = g1["cena"] - g2["cena"]
+        # Uproszczony payoff
+        payoff = np.minimum(np.maximum(x - K1, 0), K2 - K1) + g2["cena"] - koszt
+        return payoff, koszt, {"delta": 0.5, "theta": 0.02, "vega": 0.05, "cena": koszt}
+    
+    # Default
+    return np.zeros_like(x), 0, {"delta": 0, "theta": 0, "vega": 0, "cena": 0}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# KOMPONENTY UI
+# UI HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 def rysuj_wykres(x, y, tytul, S, breakevens=None):
-    """Uniwersalna funkcja do rysowania wykresu payoff"""
+    """Rysuj wykres payoff"""
     fig = go.Figure()
     
-    # Obszary zysku/straty
-    zysk = np.where(y > 0, y, 0)
-    strata = np.where(y < 0, y, 0)
+    zysk = np.where(y > 0, y, np.nan)
+    strata = np.where(y <= 0, y, np.nan)
     
     fig.add_trace(go.Scatter(x=x, y=zysk, fill='tozeroy', name='Zysk', 
                               line=dict(color='#00FF88', width=0), fillcolor='rgba(0,255,136,0.3)'))
     fig.add_trace(go.Scatter(x=x, y=strata, fill='tozeroy', name='Strata',
                               line=dict(color='#FF4444', width=0), fillcolor='rgba(255,68,68,0.3)'))
+    fig.add_trace(go.Scatter(x=x, y=y, name='Payoff', line=dict(color='#FFFFFF', width=3)))
     
-    # Linia payoff
-    fig.add_trace(go.Scatter(x=x, y=y, name='Payoff', 
-                              line=dict(color='#FFFFFF', width=3)))
-    
-    # Linia zerowa
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-    
-    # Aktualna cena
     fig.add_vline(x=S, line_dash="dot", line_color="#FFD700", opacity=0.7,
-                  annotation_text=f"Cena: {S:.0f}", annotation_position="top")
+                  annotation_text=f"Spot: {S:.0f}", annotation_position="top")
     
-    # Breakeven points
     if breakevens:
         for be in breakevens:
-            fig.add_vline(x=be, line_dash="dash", line_color="#00BFFF", opacity=0.5,
-                          annotation_text=f"BE: {be:.2f}", annotation_position="bottom")
+            if 0.5*S < be < 1.5*S:
+                fig.add_vline(x=be, line_dash="dash", line_color="#00BFFF", opacity=0.5,
+                              annotation_text=f"BE: {be:.1f}", annotation_position="bottom")
     
     fig.update_layout(
         template="plotly_dark",
-        title=dict(text=tytul, font=dict(size=20)),
-        xaxis_title="Cena aktywa w dniu wygaśnięcia",
-        yaxis_title="Zysk / Strata (na kontrakt)",
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        height=500,
-        margin=dict(l=50, r=50, t=80, b=50)
+        title=dict(text=tytul, font=dict(size=18)),
+        xaxis_title="Cena przy wygaśnięciu",
+        yaxis_title="Zysk / Strata (PLN)",
+        height=450,
+        margin=dict(l=50, r=50, t=60, b=50),
+        showlegend=False
     )
-    
     return fig
 
-def panel_edukacyjny(strategia: Strategia, greeks: dict, koszt: float):
-    """Wyświetla panel z informacjami edukacyjnymi"""
-    
+def panel_edukacyjny(strategia, greeks, koszt):
+    """Panel edukacyjny z informacjami o strategii"""
     st.markdown("---")
-    st.subheader("📚 Panel Edukacyjny")
     
-    col1, col2 = st.columns(2)
+    # Kiedy używać
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.markdown("### 🎯 Kiedy używać tej strategii?")
+        st.markdown("### 🎯 KIEDY UŻYWAĆ?")
         st.markdown(strategia.kiedy)
-        
-        st.markdown("### 🏗️ Konstrukcja")
-        st.info(strategia.konstrukcja)
     
     with col2:
-        st.markdown("### 📊 Profil Zysku/Straty")
+        st.markdown("### 📊 PROFIL ZYSKU/STRATY")
         st.success(f"**Max Zysk:** {strategia.max_zysk}")
         st.error(f"**Max Strata:** {strategia.max_strata}")
-        st.warning(f"**Breakeven:** {strategia.breakeven}")
+        st.info(f"**Breakeven:** {strategia.breakeven}")
+        st.warning(f"**Konstrukcja:** {strategia.konstrukcja}")
     
+    # Greeks
     st.markdown("---")
-    st.markdown("### 🇬🇷 Współczynniki Greckie - Twoje Czujniki Ryzyka")
+    st.markdown("### 🇬🇷 GREEKS - Czujniki Ryzyka")
     
     g1, g2, g3, g4 = st.columns(4)
     
+    delta = greeks.get("delta", 0)
+    theta = greeks.get("theta", 0) * 100
+    vega = greeks.get("vega", 0) * 100
+    
     with g1:
-        delta_color = "🟢" if greeks.get("delta", 0) > 0 else "🔴" if greeks.get("delta", 0) < 0 else "⚪"
-        st.metric("Delta Δ", f"{greeks.get('delta', 0):.3f}", 
-                  help="Ile zyskujesz/tracisz gdy cena zmieni się o 1 PLN")
-        st.caption(f"{delta_color} {'Zarabiasz na wzroście' if greeks.get('delta', 0) > 0 else 'Zarabiasz na spadku' if greeks.get('delta', 0) < 0 else 'Neutralny'}")
+        kolor = "🟢" if delta > 0.1 else "🔴" if delta < -0.1 else "⚪"
+        st.metric("Delta Δ", f"{delta:.3f}")
+        if delta > 0.1:
+            st.caption(f"{kolor} Zarabiasz na WZROŚCIE")
+        elif delta < -0.1:
+            st.caption(f"{kolor} Zarabiasz na SPADKU")
+        else:
+            st.caption(f"{kolor} NEUTRALNY kierunkowo")
     
     with g2:
-        theta_val = greeks.get('theta', 0) * 100
-        theta_color = "🟢" if theta_val > 0 else "🔴"
-        st.metric("Theta Θ", f"{theta_val:.2f} PLN/dzień",
-                  help="Ile tracisz/zyskujesz każdego dnia przez upływ czasu")
-        st.caption(f"{theta_color} {'Czas pracuje DLA ciebie' if theta_val > 0 else 'Czas pracuje PRZECIW tobie'}")
+        kolor = "🟢" if theta > 0.5 else "🔴" if theta < -0.5 else "⚪"
+        st.metric("Theta Θ", f"{theta:.2f} PLN/dzień")
+        if theta > 0.5:
+            st.caption(f"{kolor} Czas pracuje DLA Ciebie! 💰")
+        elif theta < -0.5:
+            st.caption(f"{kolor} Czas pracuje PRZECIW Tobie! ⏰")
+        else:
+            st.caption(f"{kolor} Neutralny czasowo")
     
     with g3:
-        vega_val = greeks.get('vega', 0) * 100
-        vega_color = "🟢" if vega_val > 0 else "🔴"
-        st.metric("Vega V", f"{vega_val:.2f} PLN/%IV",
-                  help="Ile zyskujesz/tracisz gdy zmienność wzrośnie o 1%")
-        st.caption(f"{vega_color} {'Korzystasz ze wzrostu strachu' if vega_val > 0 else 'Korzystasz ze spokoju'}")
+        kolor = "🟢" if vega > 1 else "🔴" if vega < -1 else "⚪"
+        st.metric("Vega V", f"{vega:.2f} PLN/%IV")
+        if vega > 1:
+            st.caption(f"{kolor} Zyskujesz gdy IV ROŚNIE 🌪️")
+        elif vega < -1:
+            st.caption(f"{kolor} Zyskujesz gdy IV SPADA 😴")
+        else:
+            st.caption(f"{kolor} Neutralny na zmienność")
     
     with g4:
         if koszt > 0:
-            st.metric("💰 Koszt wejścia", f"{koszt:.2f} PLN", help="Ile płacisz za otwarcie pozycji")
-            st.caption("Debet - płacisz z góry")
+            st.metric("💰 Koszt", f"{koszt:.2f} PLN")
+            st.caption("DEBET - płacisz z góry")
+        elif koszt < 0:
+            st.metric("💰 Kredyt", f"{-koszt:.2f} PLN")
+            st.caption("KREDYT - dostajesz pieniądze! 🎉")
         else:
-            st.metric("💰 Kredyt", f"{-koszt:.2f} PLN", help="Ile otrzymujesz za otwarcie pozycji")
-            st.caption("Kredyt - dostajesz pieniądze!")
+            st.metric("💰 Koszt", "0 PLN")
+            st.caption("Zero-cost!")
+    
+    # Uwagi
+    if strategia.uwagi:
+        st.markdown("---")
+        st.markdown("### 💡 WAŻNE UWAGI")
+        st.info(strategia.uwagi)
+
+def get_params_ui(strategia_nazwa, S):
+    """Dynamiczne UI dla parametrów strategii"""
+    params = {}
+    
+    single_strike = ["Long Call", "Long Put", "Short Call (Naked)", "Short Put (Cash-Secured)",
+                     "Covered Call", "Covered Put", "Protective Put", "Protective Call",
+                     "Long Straddle", "Short Straddle", "Synthetic Long Stock", "Synthetic Short Stock",
+                     "Calendar Call Spread", "Calendar Put Spread"]
+    
+    two_strikes_same = ["Bull Call Spread", "Bear Put Spread", "Bull Put Spread (Credit)", 
+                        "Bear Call Spread (Credit)", "Call Ratio Spread", "Put Ratio Spread",
+                        "Diagonal Call Spread"]
+    
+    strangle = ["Long Strangle", "Short Strangle", "Collar (Zero-Cost)"]
+    
+    condor = ["Iron Condor"]
+    butterfly = ["Iron Butterfly"]
+    butterfly3 = ["Long Call Butterfly", "Long Put Butterfly"]
+    
+    if strategia_nazwa in single_strike:
+        default = S if "ATM" in STRATEGIE[strategia_nazwa].konstrukcja or "Straddle" in strategia_nazwa else S * 1.05 if "Call" in strategia_nazwa and "Put" not in strategia_nazwa else S * 0.95
+        params["K"] = st.slider("Strike (K)", float(S * 0.7), float(S * 1.3), float(default), step=1.0)
+    
+    elif strategia_nazwa in two_strikes_same:
+        col1, col2 = st.columns(2)
+        if "Bull" in strategia_nazwa or "Ratio" in strategia_nazwa:
+            with col1:
+                params["K1"] = st.slider("K1 (niższy)", float(S * 0.8), float(S * 1.1), float(S * 0.95), step=1.0)
+            with col2:
+                params["K2"] = st.slider("K2 (wyższy)", float(params["K1"]), float(S * 1.3), float(S * 1.1), step=1.0)
+        else:  # Bear
+            with col1:
+                params["K1"] = st.slider("K1 (niższy)", float(S * 0.7), float(S), float(S * 0.9), step=1.0)
+            with col2:
+                params["K2"] = st.slider("K2 (wyższy)", float(params["K1"]), float(S * 1.2), float(S * 1.05), step=1.0)
+    
+    elif strategia_nazwa in strangle:
+        col1, col2 = st.columns(2)
+        with col1:
+            params["K_put"] = st.slider("Strike PUT", float(S * 0.7), float(S), float(S * 0.9), step=1.0)
+        with col2:
+            params["K_call"] = st.slider("Strike CALL", float(S), float(S * 1.3), float(S * 1.1), step=1.0)
+    
+    elif strategia_nazwa in condor:
+        st.markdown("*Strike'i: K1 < K2 < K3 < K4*")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            params["K1"] = st.number_input("K1 (Put buy)", value=float(S * 0.85), step=1.0)
+        with col2:
+            params["K2"] = st.number_input("K2 (Put sell)", value=float(S * 0.95), step=1.0)
+        with col3:
+            params["K3"] = st.number_input("K3 (Call sell)", value=float(S * 1.05), step=1.0)
+        with col4:
+            params["K4"] = st.number_input("K4 (Call buy)", value=float(S * 1.15), step=1.0)
+    
+    elif strategia_nazwa in butterfly:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            params["K_low"] = st.number_input("K niskie", value=float(S * 0.9), step=1.0)
+        with col2:
+            params["K_mid"] = st.number_input("K środkowe", value=float(S), step=1.0)
+        with col3:
+            params["K_high"] = st.number_input("K wysokie", value=float(S * 1.1), step=1.0)
+    
+    elif strategia_nazwa in butterfly3:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            params["K1"] = st.number_input("K1 (ITM)", value=float(S * 0.95), step=1.0)
+        with col2:
+            params["K2"] = st.number_input("K2 (ATM)", value=float(S), step=1.0)
+        with col3:
+            params["K3"] = st.number_input("K3 (OTM)", value=float(S * 1.05), step=1.0)
+    
+    else:
+        params["K"] = S
+    
+    return params
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GŁÓWNA APLIKACJA
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
-    # Nagłówek
-    st.title("🎓 Akademia Opcji")
-    st.markdown("*Interaktywna platforma do nauki strategii opcyjnych*")
+    st.title("🎓 Akademia Opcji v2.0")
+    st.markdown("*Kompletna platforma edukacyjna - wszystkie strategie opcyjne*")
     
-    # Sidebar - parametry
+    # Sidebar
     st.sidebar.header("⚙️ Parametry Rynkowe")
     S = st.sidebar.number_input("📈 Cena aktywa (S)", value=100.0, min_value=1.0, step=1.0)
     vol = st.sidebar.slider("🌪️ Zmienność IV (%)", 5, 150, 30) / 100
@@ -541,18 +1061,16 @@ def main():
     T = dni / 365
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📖 Legenda IV")
-    st.sidebar.markdown("""
-    - **< 20%**: Niska (spokojny rynek)
-    - **20-40%**: Normalna
-    - **40-60%**: Podwyższona
-    - **> 60%**: Wysoka (strach/panika)
-    """)
+    st.sidebar.markdown("### 📊 Interpretacja IV")
+    iv_level = "🟢 NISKA" if vol < 0.2 else "🟡 NORMALNA" if vol < 0.4 else "🟠 WYSOKA" if vol < 0.6 else "🔴 EKSTREMALNA"
+    st.sidebar.markdown(f"**{iv_level}** ({vol*100:.0f}%)")
     
-    # Wybór strategii
-    st.markdown("---")
+    if vol < 0.2:
+        st.sidebar.info("💡 Kupuj opcje (long straddle)")
+    elif vol > 0.5:
+        st.sidebar.info("💡 Sprzedawaj premię (iron condor)")
     
-    # Grupowanie strategii według kategorii
+    # Grupowanie strategii
     kategorie = {}
     for nazwa, strat in STRATEGIE.items():
         kat = strat.kategoria
@@ -560,12 +1078,13 @@ def main():
             kategorie[kat] = []
         kategorie[kat].append(nazwa)
     
-    col_wybor1, col_wybor2 = st.columns([2, 3])
+    # Wybór strategii
+    st.markdown("---")
+    col1, col2 = st.columns([1, 2])
     
-    with col_wybor1:
+    with col1:
         wybrana_kategoria = st.selectbox("📂 Kategoria", list(kategorie.keys()))
-    
-    with col_wybor2:
+    with col2:
         wybrana_strategia = st.selectbox("📋 Strategia", kategorie[wybrana_kategoria])
     
     strategia = STRATEGIE[wybrana_strategia]
@@ -574,132 +1093,23 @@ def main():
     st.markdown(f"## {strategia.poziom} {strategia.nazwa}")
     st.markdown(f"*{strategia.opis}*")
     
-    # Parametry specyficzne dla strategii
+    # Parametry
     st.markdown("### ⚙️ Parametry Strategii")
+    params = get_params_ui(wybrana_strategia, S)
     
-    x = np.linspace(S * 0.6, S * 1.4, 200)
+    # Obliczenia
+    x = np.linspace(S * 0.5, S * 1.5, 300)
+    y, koszt, greeks = get_payoff(wybrana_strategia, x, S, params, T, vol)
     
-    # Dynamiczne UI w zależności od strategii
-    if wybrana_strategia == "Long Call":
-        K = st.slider("Strike (K)", float(S * 0.8), float(S * 1.2), float(S * 1.05))
-        y, koszt, greeks = payoff_long_call(x, S, K, T, vol)
-        be = [K + koszt]
-        
-    elif wybrana_strategia == "Long Put":
-        K = st.slider("Strike (K)", float(S * 0.8), float(S * 1.2), float(S * 0.95))
-        y, koszt, greeks = payoff_long_put(x, S, K, T, vol)
-        be = [K - koszt]
-        
-    elif wybrana_strategia == "Covered Call":
-        K = st.slider("Strike sprzedawanego Call", float(S), float(S * 1.3), float(S * 1.1))
-        y, koszt, greeks = payoff_covered_call(x, S, K, T, vol)
-        be = [S - koszt]
-        
-    elif wybrana_strategia == "Protective Put":
-        K = st.slider("Strike kupowanego Put", float(S * 0.7), float(S), float(S * 0.95))
-        y, koszt, greeks = payoff_protective_put(x, S, K, T, vol)
-        be = [S + koszt]
-        
-    elif wybrana_strategia == "Collar":
-        col1, col2 = st.columns(2)
-        with col1:
-            K_put = st.slider("Strike Put (ochrona)", float(S * 0.7), float(S), float(S * 0.95))
-        with col2:
-            K_call = st.slider("Strike Call (limit)", float(S), float(S * 1.3), float(S * 1.10))
-        y, koszt, greeks = payoff_collar(x, S, K_put, K_call, T, vol)
-        be = [S - koszt] if koszt != 0 else [S]
-        
-    elif wybrana_strategia == "Bull Call Spread":
-        col1, col2 = st.columns(2)
-        with col1:
-            K1 = st.slider("Strike kupowanego Call", float(S * 0.8), float(S * 1.1), float(S))
-        with col2:
-            K2 = st.slider("Strike sprzedawanego Call", float(K1), float(S * 1.3), float(S * 1.1))
-        y, koszt, greeks = payoff_bull_call_spread(x, S, K1, K2, T, vol)
-        be = [K1 + koszt]
-        
-    elif wybrana_strategia == "Bear Put Spread":
-        col1, col2 = st.columns(2)
-        with col1:
-            K1 = st.slider("Strike sprzedawanego Put", float(S * 0.7), float(S), float(S * 0.9))
-        with col2:
-            K2 = st.slider("Strike kupowanego Put", float(K1), float(S * 1.2), float(S))
-        y, koszt, greeks = payoff_bear_put_spread(x, S, K1, K2, T, vol)
-        be = [K2 - koszt]
-        
-    elif wybrana_strategia == "Bull Put Spread":
-        col1, col2 = st.columns(2)
-        with col1:
-            K1 = st.slider("Strike kupowanego Put (niższy)", float(S * 0.7), float(S * 0.95), float(S * 0.9))
-        with col2:
-            K2 = st.slider("Strike sprzedawanego Put (wyższy)", float(K1), float(S * 1.1), float(S))
-        y, koszt, greeks = payoff_bull_put_spread(x, S, K1, K2, T, vol)
-        be = [K2 + koszt]  # koszt jest ujemny (kredyt)
-        
-    elif wybrana_strategia == "Bear Call Spread":
-        col1, col2 = st.columns(2)
-        with col1:
-            K1 = st.slider("Strike sprzedawanego Call (niższy)", float(S * 0.9), float(S * 1.1), float(S))
-        with col2:
-            K2 = st.slider("Strike kupowanego Call (wyższy)", float(K1), float(S * 1.3), float(S * 1.1))
-        y, koszt, greeks = payoff_bear_call_spread(x, S, K1, K2, T, vol)
-        be = [K1 - koszt]  # koszt jest ujemny (kredyt)
-        
-    elif wybrana_strategia == "Long Straddle":
-        K = st.slider("Strike (ATM)", float(S * 0.9), float(S * 1.1), float(S))
-        y, koszt, greeks = payoff_long_straddle(x, S, K, T, vol)
-        be = [K - koszt, K + koszt]
-        
-    elif wybrana_strategia == "Long Strangle":
-        col1, col2 = st.columns(2)
-        with col1:
-            K_put = st.slider("Strike Put (OTM)", float(S * 0.7), float(S * 0.95), float(S * 0.9))
-        with col2:
-            K_call = st.slider("Strike Call (OTM)", float(S * 1.05), float(S * 1.3), float(S * 1.1))
-        y, koszt, greeks = payoff_long_strangle(x, S, K_put, K_call, T, vol)
-        p_prem = bs(S, K_put, T, R, vol, "put")["cena"]
-        c_prem = bs(S, K_call, T, R, vol, "call")["cena"]
-        be = [K_put - koszt, K_call + koszt]
-        
-    elif wybrana_strategia == "Iron Condor":
-        st.markdown("*Ustaw 4 strike'i: K1 < K2 < K3 < K4*")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            K1 = st.number_input("K1 (kupno put)", value=float(S * 0.85))
-        with col2:
-            K2 = st.number_input("K2 (sprzedaż put)", value=float(S * 0.95))
-        with col3:
-            K3 = st.number_input("K3 (sprzedaż call)", value=float(S * 1.05))
-        with col4:
-            K4 = st.number_input("K4 (kupno call)", value=float(S * 1.15))
-        y, koszt, greeks = payoff_iron_condor(x, S, K1, K2, K3, K4, T, vol)
-        be = [K2 + koszt, K3 - koszt]  # koszt jest ujemny
-        
-    elif wybrana_strategia == "Iron Butterfly":
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            K_low = st.number_input("K niskie (kupno put)", value=float(S * 0.9))
-        with col2:
-            K_mid = st.number_input("K środkowe (sprzedaż)", value=float(S))
-        with col3:
-            K_high = st.number_input("K wysokie (kupno call)", value=float(S * 1.1))
-        y, koszt, greeks = payoff_iron_butterfly(x, S, K_low, K_mid, K_high, T, vol)
-        be = [K_mid + koszt, K_mid - koszt]
-        
-    elif wybrana_strategia == "Long Butterfly":
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            K1 = st.number_input("K1 (kupno call ITM)", value=float(S * 0.95))
-        with col2:
-            K2 = st.number_input("K2 (sprzedaż 2x call ATM)", value=float(S))
-        with col3:
-            K3 = st.number_input("K3 (kupno call OTM)", value=float(S * 1.05))
-        y, koszt, greeks = payoff_long_butterfly(x, S, K1, K2, K3, T, vol)
-        be = [K1 + koszt, K3 - koszt]
+    # Breakeven
+    breakevens = []
+    zero_crossings = np.where(np.diff(np.sign(y)))[0]
+    for idx in zero_crossings:
+        breakevens.append(x[idx])
     
     # Wykres
-    st.markdown("### 📈 Wykres Payoff")
-    fig = rysuj_wykres(x, y * 100, f"Profil Zysku/Straty: {wybrana_strategia}", S, be)
+    st.markdown("### 📈 Wykres Payoff (przy wygaśnięciu)")
+    fig = rysuj_wykres(x, y * 100, f"{wybrana_strategia}", S, breakevens)
     st.plotly_chart(fig, use_container_width=True)
     
     # Panel edukacyjny
@@ -709,35 +1119,55 @@ def main():
     st.markdown("---")
     st.markdown("### 🎭 Analiza Scenariuszy")
     
-    scenariusze = {
-        "📉 Silny spadek (-20%)": S * 0.8,
-        "📉 Umiarkowany spadek (-10%)": S * 0.9,
-        "➡️ Bez zmian": S,
-        "📈 Umiarkowany wzrost (+10%)": S * 1.1,
-        "📈 Silny wzrost (+20%)": S * 1.2
-    }
+    scenariusze = [
+        ("📉 -20%", S * 0.8),
+        ("📉 -10%", S * 0.9),
+        ("➡️ 0%", S),
+        ("📈 +10%", S * 1.1),
+        ("📈 +20%", S * 1.2)
+    ]
     
     cols = st.columns(5)
-    for i, (nazwa, cena) in enumerate(scenariusze.items()):
+    for i, (nazwa, cena) in enumerate(scenariusze):
         idx = np.argmin(np.abs(x - cena))
         wynik = y[idx] * 100
         with cols[i]:
-            if wynik > 0:
-                st.success(f"**{nazwa}**\n\n💰 +{wynik:.0f} PLN")
-            elif wynik < 0:
-                st.error(f"**{nazwa}**\n\n💸 {wynik:.0f} PLN")
+            if wynik > 10:
+                st.success(f"**{nazwa}**\n\n💰 **+{wynik:.0f}** PLN")
+            elif wynik < -10:
+                st.error(f"**{nazwa}**\n\n💸 **{wynik:.0f}** PLN")
             else:
-                st.info(f"**{nazwa}**\n\n⚖️ {wynik:.0f} PLN")
+                st.info(f"**{nazwa}**\n\n⚖️ **{wynik:.0f}** PLN")
+    
+    # Statystyki
+    st.markdown("---")
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+    
+    with col_stat1:
+        max_zysk = np.max(y) * 100
+        st.metric("📈 Max Zysk", f"{max_zysk:.0f} PLN" if max_zysk < 10000 else "♾️")
+    
+    with col_stat2:
+        max_strata = np.min(y) * 100
+        st.metric("📉 Max Strata", f"{max_strata:.0f} PLN" if max_strata > -10000 else "♾️")
+    
+    with col_stat3:
+        if breakevens:
+            be_str = " | ".join([f"{be:.1f}" for be in breakevens[:2]])
+            st.metric("⚖️ Breakeven", be_str)
+        else:
+            st.metric("⚖️ Breakeven", "N/A")
+    
+    with col_stat4:
+        if max_strata != 0 and max_zysk > 0 and max_strata > -10000:
+            ratio = max_zysk / abs(max_strata)
+            st.metric("📊 Zysk/Ryzyko", f"{ratio:.2f}x")
+        else:
+            st.metric("📊 Zysk/Ryzyko", "N/A")
     
     # Stopka
     st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: gray; padding: 20px;'>
-        <p>⚠️ <strong>Ostrzeżenie o ryzyku:</strong> Handel opcjami wiąże się ze znacznym ryzykiem straty. 
-        Niektóre strategie mogą generować straty przekraczające początkową inwestycję.</p>
-        <p>🎓 Akademia Opcji - Edukacyjne narzędzie do nauki strategii opcyjnych</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("⚠️ **Ostrzeżenie:** Handel opcjami wiąże się ze znacznym ryzykiem. Niektóre strategie mogą generować straty przekraczające początkową inwestycję. To narzędzie służy wyłącznie celom edukacyjnym.")
 
 if __name__ == "__main__":
     main()
